@@ -1,6 +1,6 @@
 import torch
 from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, ConcatDataset, random_split
 
 
 def get_data_loader(
@@ -16,10 +16,28 @@ def get_data_loader(
         transform = transforms.ToTensor()
 
     dataset_name = dataset_name.lower()
-    split = split.lower().strip()
+    split = split.lower().strip() if split is not None else None
 
     if dataset_name == "cifar10":
-        if split in ["train", "val"]:
+        if split is None:
+            # Download and combine train + test into a single dataset
+            # (useful for GAN training, where there's no need for a
+            # train/val/test split -- we just want every available image)
+            train_dataset = datasets.CIFAR10(
+                root=data_dir,
+                train=True,
+                download=True,
+                transform=transform
+            )
+            test_dataset = datasets.CIFAR10(
+                root=data_dir,
+                train=False,
+                download=True,
+                transform=transform
+            )
+            dataset = ConcatDataset([train_dataset, test_dataset])
+
+        elif split in ["train", "val"]:
             full_train_dataset = datasets.CIFAR10(
                 root=data_dir,
                 train=True,
@@ -52,7 +70,22 @@ def get_data_loader(
             raise ValueError("split must be 'train', 'val', or 'test'")
 
     elif dataset_name == "mnist":
-        if split in ["train", "val"]:
+        if split is None:
+            train_dataset = datasets.MNIST(
+                root=data_dir,
+                train=True,
+                download=True,
+                transform=transform
+            )
+            test_dataset = datasets.MNIST(
+                root=data_dir,
+                train=False,
+                download=True,
+                transform=transform
+            )
+            dataset = ConcatDataset([train_dataset, test_dataset])
+
+        elif split in ["train", "val"]:
             full_train_dataset = datasets.MNIST(
                 root=data_dir,
                 train=True,
@@ -92,7 +125,7 @@ def get_data_loader(
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=(split == "train")
+        shuffle=(split == "train" or split is None)
     )
 
     return loader

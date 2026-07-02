@@ -1,14 +1,22 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel
 from app.bigram_model import BigramModel
 import io
+import os
 import glob
 import torch
+import spacy
 from PIL import Image
 from torchvision import transforms
+from torchvision.utils import make_grid
 from helper_lib.model import get_model
 
 app = FastAPI()
+
+# Load spaCy model with word vectors (medium/large models ship with real
+# word embeddings; the small model's vectors are just hashed placeholders)
+nlp = spacy.load("en_core_web_md")
 
 # Sample corpus for the bigram model
 corpus = [
@@ -51,9 +59,32 @@ image_transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
+# Load trained GAN generator (final saved model, not per-epoch checkpoints)
+hw3_gen_model = get_model("hw3_generator").to(device)
+Z_DIM = 100
+final_gen_path = "checkpoints/hw3_generator_final.pth"
+
+if not os.path.exists(final_gen_path):
+    hw3_gen_model = None
+else:
+    gen_checkpoint = torch.load(final_gen_path, map_location=device)
+    hw3_gen_model.load_state_dict(gen_checkpoint)
+    hw3_gen_model.eval()
+    print(f"Loaded generator checkpoint: {final_gen_path}")
+
 class TextGenerationRequest(BaseModel):
     start_word: str
     length: int
+
+class EmbeddingRequest(BaseModel):
+    text: str
+
+class SimilarityRequest(BaseModel):
+    word1: str
+    word2: str
+
+class ImageGenerationRequest(BaseModel):
+    num_images: int = 16
 
 @app.get("/")
 def read_root():
@@ -63,6 +94,46 @@ def read_root():
 def generate_text(request: TextGenerationRequest):
     generated_text = bigram_model.generate_text(request.start_word, request.length)
     return {"generated_text": generated_text}
+
+@app.post("/embedding")
+def get_embedding(request: EmbeddingRequest):
+    doc = nlp(request.text)
+    return {
+        "text": request.text,
+        "embedding": doc.vector.tolist(),
+        "dimensions": doc.vector.shape[0]
+    }
+
+@app.post("/similarity")
+def get_similarity(request: SimilarityRequest):
+    token1 = nlp(request.word1)
+    token2 = nlp(request.word2)
+    return {
+        "word1": request.word1,
+        "word2": request.word2,
+        "similarity": token1.similarity(token2)
+    }
+
+@app.post("/generate-image")
+def generate_image(request: ImageGenerationRequest):
+    if hw3_gen_model is None:
+        return {
+            "error": "No trained GAN generator checkpoint found. Train the model first."
+        }
+
+    noise = torch.randn(request.num_images, Z_DIM).to(device)
+
+    with torch.no_grad():
+        fake_images = hw3_gen_model(noise).cpu()
+
+    grid = make_grid(fake_images, normalize=True)
+    grid_image = transforms.ToPILImage()(grid)
+
+    buffer = io.BytesIO()
+    grid_image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return Response(content=buffer.getvalue(), media_type="image/png")
 
 @app.post("/classify")
 async def classify_image(file: UploadFile = File(...)):
