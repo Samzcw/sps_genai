@@ -3,25 +3,25 @@ name = "sps-genai"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi[standard]>=0.136.3",
     "spacy>=3.8.14",
-    "torch==2.5.1",
-    "torchvision==0.20.1",
+    "torch>=2.12.1,<2.13",
+    "torchvision>=0.27.1,<0.28",
     "tqdm>=4.68.3",
     "uvicorn>=0.48.0",
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cu121" },
+    { index = "pytorch-cu126" },
 ]
 torchvision = [
-    { index = "pytorch-cu121" },
+    { index = "pytorch-cu126" },
 ]

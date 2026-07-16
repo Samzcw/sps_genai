@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.12-slim-bookworm
+FROM python:3.13-slim-bookworm
 
 # The installer requires curl (and certificates) to download the release archive
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
@@ -22,8 +22,12 @@ COPY pyproject.toml uv.lock /code/
 # Install dependencies using uv
 RUN uv sync --frozen
 
+# Download the spaCy model used by main.py (not a pip dependency, must be fetched separately)
+RUN uv run python -m spacy download en_core_web_md
+
 # Copy the application code
 COPY ./app /code/app
+COPY ./helper_lib /code/helper_lib
 COPY main.py /code/
 
 # Command to run the application
