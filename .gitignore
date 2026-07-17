@@ -14,4 +14,9 @@ wheels/
 data/
 
 # Model checkpoints
-hw2_checkpoints/
+hw2_checkpoints/*
+!hw2_checkpoints/best/
+
+checkpoints/*
+!checkpoints/hw3_generator_final.pth
+!checkpoints/hw3_discriminator_final.pth

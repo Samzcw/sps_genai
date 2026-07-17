@@ -41,3 +41,4 @@ hw3_trained_gen, hw3_trained_disc, hw3_datalogs = train_gan(
 
 print("Training complete. Saving final models...")
 torch.save(hw3_trained_gen.state_dict(), "checkpoints/hw3_generator_final.pth")
+torch.save(hw3_trained_disc.state_dict(), "checkpoints/hw3_discriminator_final.pth")
