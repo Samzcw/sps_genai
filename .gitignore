@@ -17,6 +17,11 @@ data/
 hw2_checkpoints/*
 !hw2_checkpoints/best/
 
-checkpoints/*
-!checkpoints/hw3_generator_final.pth
-!checkpoints/hw3_discriminator_final.pth
+hw3_checkpoints/*
+!hw3_checkpoints/hw3_generator_final.pth
+!hw3_checkpoints/hw3_discriminator_final.pth
+
+hw4_checkpoints/*
+!hw4_checkpoints/hw4_energy_final.pth
+!hw4_checkpoints/hw4_diffusion_final.pth
+!hw4_checkpoints/best/

@@ -11,6 +11,8 @@ from PIL import Image
 from torchvision import transforms
 from torchvision.utils import make_grid
 from helper_lib.model import get_model
+from helper_lib.energy_trainer import generate_samples as energy_generate_samples
+from helper_lib.diffusion_trainer import DiffusionModel, offset_cosine_diffusion_schedule
 
 app = FastAPI()
 
@@ -72,6 +74,44 @@ else:
     hw3_gen_model.eval()
     print(f"Loaded generator checkpoint: {final_gen_path}")
 
+# Load trained HW4 energy model (final saved model)
+hw4_energy_model = get_model("hw4_energy").to(device)
+ENERGY_IMG_SHAPE = (3, 32, 32)
+final_energy_path = "hw4_checkpoints/hw4_energy_final.pth"
+
+if not os.path.exists(final_energy_path):
+    hw4_energy_model = None
+else:
+    hw4_energy_model.load_state_dict(torch.load(final_energy_path, map_location=device))
+    hw4_energy_model.eval()
+    print(f"Loaded energy model checkpoint: {final_energy_path}")
+
+# Load trained HW4 diffusion model (prefer the best validation checkpoint
+# over the final epoch -- diffusion training can have unstable batches that
+# make the last epoch worse than an earlier one, so "final" isn't always best)
+DIFFUSION_IMAGE_SIZE = 32
+
+diffusion_checkpoint_files = sorted(glob.glob("hw4_checkpoints/best/*.pth"))
+if len(diffusion_checkpoint_files) == 0:
+    final_diffusion_path = "hw4_checkpoints/hw4_diffusion_final.pth"
+    diffusion_checkpoint_files = [final_diffusion_path] if os.path.exists(final_diffusion_path) else []
+
+if len(diffusion_checkpoint_files) == 0:
+    hw4_diffusion_model = None
+else:
+    diffusion_checkpoint_path = diffusion_checkpoint_files[-1]
+    hw4_unet = get_model("hw4_diffusion").to(device)
+    hw4_diffusion_model = DiffusionModel(hw4_unet, offset_cosine_diffusion_schedule)
+    diffusion_checkpoint = torch.load(diffusion_checkpoint_path, map_location=device)
+    hw4_diffusion_model.ema_network.load_state_dict(diffusion_checkpoint["ema_model_state_dict"])
+    hw4_diffusion_model.set_normalizer(
+        diffusion_checkpoint["normalizer_mean"].to(device),
+        diffusion_checkpoint["normalizer_std"].to(device),
+    )
+    hw4_diffusion_model.to(device)
+    hw4_diffusion_model.eval()
+    print(f"Loaded diffusion model checkpoint: {diffusion_checkpoint_path}")
+
 class TextGenerationRequest(BaseModel):
     start_word: str
     length: int
@@ -127,6 +167,50 @@ def generate_image(request: ImageGenerationRequest):
         fake_images = hw3_gen_model(noise).cpu()
 
     grid = make_grid(fake_images, normalize=True)
+    grid_image = transforms.ToPILImage()(grid)
+
+    buffer = io.BytesIO()
+    grid_image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return Response(content=buffer.getvalue(), media_type="image/png")
+
+@app.post("/generate-image-energy")
+def generate_image_energy(request: ImageGenerationRequest):
+    if hw4_energy_model is None:
+        return {
+            "error": "No trained energy model checkpoint found. Train the model first."
+        }
+
+    # Start from pure noise and run Langevin dynamics to sculpt it into
+    # something the trained energy model considers low-energy ("real")
+    noise = (torch.rand((request.num_images,) + ENERGY_IMG_SHAPE, device=device) * 2 - 1)
+    fake_images = energy_generate_samples(
+        hw4_energy_model, noise, steps=60, step_size=10, noise_std=0.005
+    ).cpu()
+
+    grid = make_grid(fake_images, normalize=True, value_range=(-1, 1))
+    grid_image = transforms.ToPILImage()(grid)
+
+    buffer = io.BytesIO()
+    grid_image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return Response(content=buffer.getvalue(), media_type="image/png")
+
+@app.post("/generate-image-diffusion")
+def generate_image_diffusion(request: ImageGenerationRequest):
+    if hw4_diffusion_model is None:
+        return {
+            "error": "No trained diffusion model checkpoint found. Train the model first."
+        }
+
+    fake_images = hw4_diffusion_model.generate(
+        num_images=request.num_images, diffusion_steps=20, image_size=DIFFUSION_IMAGE_SIZE
+    ).cpu()
+
+    # generate() already denormalizes to [0, 1], so no normalize=True here
+    grid = make_grid(fake_images, normalize=False)
     grid_image = transforms.ToPILImage()(grid)
 
     buffer = io.BytesIO()
