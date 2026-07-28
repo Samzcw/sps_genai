@@ -64,7 +64,7 @@ image_transform = transforms.Compose([
 # Load trained GAN generator (final saved model, not per-epoch checkpoints)
 hw3_gen_model = get_model("hw3_generator").to(device)
 Z_DIM = 100
-final_gen_path = "checkpoints/hw3_generator_final.pth"
+final_gen_path = "hw3_checkpoints/hw3_generator_final.pth"
 
 if not os.path.exists(final_gen_path):
     hw3_gen_model = None
