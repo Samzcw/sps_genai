@@ -13,6 +13,8 @@ from torchvision.utils import make_grid
 from helper_lib.model import get_model
 from helper_lib.energy_trainer import generate_samples as energy_generate_samples
 from helper_lib.diffusion_trainer import DiffusionModel, offset_cosine_diffusion_schedule
+from helper_lib.gpt2_squad_trainer import get_tokenizer, generate_with_llm
+from transformers import AutoModelForCausalLM
 
 app = FastAPI()
 
@@ -112,6 +114,19 @@ else:
     hw4_diffusion_model.eval()
     print(f"Loaded diffusion model checkpoint: {diffusion_checkpoint_path}")
 
+# Load trained HW5 fine-tuned GPT2 (final saved model + tokenizer,
+# saved together via save_pretrained in gpt2_squad_trainer.train_gpt2_squad)
+LLM_CHECKPOINT_DIR = "hw5_checkpoints/gpt2-squad-finetuned"
+
+if not os.path.exists(LLM_CHECKPOINT_DIR):
+    hw5_llm_model = None
+    hw5_tokenizer = None
+else:
+    hw5_tokenizer = get_tokenizer(LLM_CHECKPOINT_DIR)
+    hw5_llm_model = AutoModelForCausalLM.from_pretrained(LLM_CHECKPOINT_DIR).to(device)
+    hw5_llm_model.eval()
+    print(f"Loaded fine-tuned LLM checkpoint: {LLM_CHECKPOINT_DIR}")
+
 class TextGenerationRequest(BaseModel):
     start_word: str
     length: int
@@ -133,6 +148,18 @@ def read_root():
 @app.post("/generate")
 def generate_text(request: TextGenerationRequest):
     generated_text = bigram_model.generate_text(request.start_word, request.length)
+    return {"generated_text": generated_text}
+
+@app.post("/generate_with_llm")
+def generate_with_llm_endpoint(request: TextGenerationRequest):
+    if hw5_llm_model is None:
+        return {
+            "error": "No fine-tuned LLM checkpoint found. Train the model first."
+        }
+
+    generated_text = generate_with_llm(
+        hw5_llm_model, hw5_tokenizer, request.start_word, request.length, device
+    )
     return {"generated_text": generated_text}
 
 @app.post("/embedding")

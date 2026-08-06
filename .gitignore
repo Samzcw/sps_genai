@@ -25,3 +25,17 @@ hw4_checkpoints/*
 !hw4_checkpoints/hw4_energy_final.pth
 !hw4_checkpoints/hw4_diffusion_final.pth
 !hw4_checkpoints/best/
+
+hw5_checkpoints/*
+!hw5_checkpoints/gpt2-squad-finetuned/
+hw5_checkpoints/gpt2-squad-finetuned/checkpoint-*/
+
+# Stray default-named checkpoint dir from an earlier test run
+checkpoints/
+
+# Generated sample-image grids (regenerable, not needed in version control)
+hw3_samples/
+hw4_samples/
+hw4_samples_diffusion/
+
+hw5_checkpoints/
